@@ -53,7 +53,7 @@ SAIL_VM_SRCS += $(SAIL_RV64_VM_SRCS)
 endif
 
 # Non-instruction sources
-PRELUDE = prelude.sail prelude_mapping.sail $(SAIL_XLEN) $(SAIL_FLEN) prelude_mem_metadata.sail prelude_mem.sail
+PRELUDE = prelude.sail prelude_mapping.sail $(SAIL_XLEN) $(SAIL_FLEN) ../../fail_defs.sail prelude_mem_metadata.sail prelude_mem.sail
 
 SAIL_REGS_SRCS = riscv_reg_type.sail riscv_freg_type.sail riscv_regs.sail riscv_pc_access.sail riscv_sys_regs.sail
 SAIL_REGS_SRCS += riscv_pmp_regs.sail riscv_pmp_control.sail
@@ -143,7 +143,7 @@ ifneq (,$(COVERAGE))
 C_FLAGS += --coverage -O1
 SAIL_FLAGS += -Oconstant_fold
 else
-C_FLAGS += -O3 -flto
+C_FLAGS += -O3 -fno-lto
 endif
 
 RISCV_EXTRAS_LEM_FILES = riscv_extras.lem mem_metadata.lem riscv_extras_fdext.lem
@@ -217,8 +217,8 @@ ocaml_emulator/tracecmp: ocaml_emulator/tracecmp.ml
 	ocamlfind ocamlopt -annot -linkpkg -package unix $^ -o $@
 
 generated_definitions/c/riscv_model_$(ARCH).c: $(SAIL_SRCS) model/main.sail Makefile
-	mkdir -p generated_definitions/c
-	$(SAIL) $(SAIL_FLAGS) -O -Oconstant_fold -memo_z3 -c -c_include riscv_prelude.h -c_include riscv_platform.h -c_no_main $(SAIL_SRCS) model/main.sail -o $(basename $@)
+	mkdir -p $(dir $@)
+	$(SAIL) $(SAIL_FLAGS) -O -Oconstant_fold -memo_z3 -c -c_include riscv_prelude.h -c_include riscv_platform.h -c_include sal/sail/SailFailInterface.h -c_no_main $(SAIL_SRCS) model/main.sail -o $(basename $@)
 
 $(SOFTFLOAT_LIBS):
 	$(MAKE) SPECIALIZE_TYPE=$(SOFTFLOAT_SPECIALIZE_TYPE) -C $(SOFTFLOAT_LIBDIR)
@@ -231,12 +231,31 @@ osim: ocaml_emulator/riscv_ocaml_sim_$(ARCH)
 .PHONY: rvfi
 rvfi: c_emulator/riscv_rvfi_$(ARCH)
 
-c_emulator/riscv_sim_$(ARCH): generated_definitions/c/riscv_model_$(ARCH).c $(C_INCS) $(C_SRCS) $(SOFTFLOAT_LIBS) Makefile
-	gcc -g $(C_WARNINGS) $(C_FLAGS) $< $(C_SRCS) $(SAIL_LIB_DIR)/*.c $(C_LIBS) -o $@
+C_EMULATOR_SRCS=generated_definitions/c/riscv_model_$(ARCH).c  $(C_SRCS) $(shell echo $(SAIL_LIB_DIR)/*.c)
+C_EMULATOR_OBJS=$(addprefix build/, $(foreach f, ${C_EMULATOR_SRCS}, $(patsubst %.c, %.o,$(notdir ${f}))))
+
+build/%.o: generated_definitions/c/%.c $(C_INCS)
+	mkdir -p $(dir $@)
+	$(CC) -g $(C_WARNINGS) $(C_FLAGS) $< -c -o $@
+
+build/%.o: c_emulator/%.c $(C_INCS) 
+	mkdir -p $(dir $@)
+	$(CC) -g $(C_WARNINGS) $(C_FLAGS) $< -c -o $@
+
+build/%.o: ${SAIL_LIB_DIR}/%.c $(C_INCS)
+	mkdir -p $(dir $@)
+	$(CC) -g $(C_WARNINGS) $(C_FLAGS) $< -c -o $@
+
+build/riscv_sim_$(ARCH).a: $(SOFTFLOAT_LIBS) ${C_EMULATOR_OBJS}
+	mkdir -p $(dir $@)
+	ar rcs $@ $(filter-out $<,$^)
+
+c_emulator/riscv_sim_$(ARCH): ${C_EMULATOR_OBJS}
+	$(CC) ${LD_FLAGS} $^ $(C_LIBS) -o $@
 
 generated_definitions/c/riscv_rvfi_model_$(ARCH).c: $(SAIL_RVFI_SRCS) model/main.sail Makefile
 	mkdir -p generated_definitions/c
-	$(SAIL) $(SAIL_FLAGS) -O -Oconstant_fold -memo_z3 -c -c_include riscv_prelude.h -c_include riscv_platform.h -c_no_main $(SAIL_RVFI_SRCS) model/main.sail -o $(basename $@)
+	$(SAIL) $(SAIL_FLAGS) -O -Oconstant_fold -memo_z3 -c -c_include riscv_prelude.h -c_include riscv_platform.h -c_include sal/sail/SailWrapper.h -c_no_main $(SAIL_RVFI_SRCS) model/main.sail -o $(basename $@)
 	sed -i -e '/^[[:space:]]*$$/d' $@
 
 c_emulator/riscv_rvfi_$(ARCH): generated_definitions/c/riscv_rvfi_model_$(ARCH).c $(C_INCS) $(C_SRCS) $(SOFTFLOAT_LIBS) Makefile
@@ -394,7 +413,8 @@ clean:
 	-rm -rf ocaml_emulator/_sbuild ocaml_emulator/_build ocaml_emulator/riscv_ocaml_sim_RV32 ocaml_emulator/riscv_ocaml_sim_RV64 ocaml_emulator/tracecmp
 	-rm -f *.gcno *.gcda
 	-rm -f z3_problems
-	-Holmake cleanAll
+	#-Holmake cleanAll
 	-rm -f handwritten_support/riscv_extras.vo handwritten_support/riscv_extras.glob handwritten_support/.riscv_extras.aux
 	-rm -f handwritten_support/mem_metadata.vo handwritten_support/mem_metadata.glob handwritten_support/.mem_metadata.aux
-	ocamlbuild -clean
+	#ocamlbuild -clean
+	-rm -rf build/

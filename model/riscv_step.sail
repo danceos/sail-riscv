@@ -9,14 +9,25 @@ function step(step_no : int) -> bool = {
   let (retired, stepped) : (Retired, bool) =
     match dispatchInterrupt(cur_privilege) {
       Some(intr, priv) => {
-        if   get_config_print_instr()
-        then print_bits("Handling interrupt: ", interruptType_to_bits(intr));
-        handle_interrupt(intr, priv);
+        if (fail_isSuppressedInterrupt(interruptType_to_bits(intr)) == false)
+        then {
+          if get_config_print_instr()
+          then print_bits("Handling interrupt: ", interruptType_to_bits(intr));
+          fail_onInterrupt(interruptType_to_bits(intr), false);
+          handle_interrupt(intr, priv);
+        };
         (RETIRE_FAIL, false)
       },
       None() => {
+        fail_willExecuteInstruction(PC);
+        fail_executeRequests();
+
         /* the extension hook interposes on the fetch result */
+        /* Disable memory events while instruction is being fetched*/
+        fail_setInstructionFetch(true);
         let f : FetchResult = ext_fetch_hook(fetch());
+        /*Enable memory events*/
+        fail_setInstructionFetch(false);
         match f {
           /* extension error */
           F_Ext_Error(e)   => {
@@ -38,7 +49,9 @@ function step(step_no : int) -> bool = {
             /* check for RVC once here instead of every RVC execute clause. */
             if haveRVC() then {
               nextPC = PC + 2;
-              (execute(ext_post_decode_hook(ast)), true)
+              let r: Retired = execute(ext_post_decode_hook(ast));
+              fail_didExecuteInstruction(PC, EXTZ(h));
+              (r, true)
              } else {
               handle_illegal();
               (RETIRE_FAIL, true)
@@ -51,11 +64,14 @@ function step(step_no : int) -> bool = {
               print_instr("[" ^ string_of_int(step_no) ^ "] [" ^ to_str(cur_privilege) ^ "]: " ^ BitStr(PC) ^ " (" ^ BitStr(w) ^ ") " ^ to_str(ast));
             };
             nextPC = PC + 4;
-            (execute(ext_post_decode_hook(ast)), true)
+            let r: Retired = execute(ext_post_decode_hook(ast));
+            fail_didExecuteInstruction(PC, EXTZ(w));
+            (r, true)
           }
         }
       }
     };
+
 
   tick_pc();
 
@@ -84,6 +100,9 @@ function loop () : unit -> unit = {
       let exit_val = unsigned(htif_exit_code);
       if exit_val == 0 then print("SUCCESS")
       else print_int("FAILURE: ", exit_val);
+      /* mask here and cause trap to FAIL */
+      fail_onTrap(0x62);
+      htif_done = false;
     } else {
       /* update time */
       i = i + 1;

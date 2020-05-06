@@ -34,7 +34,7 @@ function read_kind_of_flags (aq : bool, rl : bool, res : bool) -> option(read_ki
 // only used for actual memory regions, to avoid MMIO effects
 function phys_mem_read forall 'n, 0 < 'n <= max_mem_access . (t : AccessType(ext_access_type), paddr : xlenbits, width : atom('n), aq : bool, rl: bool, res : bool, meta : bool) -> MemoryOpResult((bits(8 * 'n), mem_meta)) = {
   let result = (match read_kind_of_flags(aq, rl, res) {
-    Some(rk) => Some(read_ram(rk, paddr, width, meta)),
+    Some(rk) => Some(read_ram(rk, paddr, width, meta, PC)),
     None()   => None()
   }) : option((bits(8 * 'n), mem_meta));
   match (t, result) {
@@ -152,7 +152,7 @@ $endif
 // only used for actual memory regions, to avoid MMIO effects
 function phys_mem_write forall 'n, 0 < 'n <= max_mem_access . (wk : write_kind, paddr : xlenbits, width : atom('n), data : bits(8 * 'n), meta : mem_meta) -> MemoryOpResult(bool) = {
   rvfi_write(paddr, width, data);
-  let result = MemValue(write_ram(wk, paddr, width, data, meta));
+  let result = MemValue(write_ram(wk, paddr, width, data, meta, PC));
   if   get_config_print_mem()
   then print_mem("mem[" ^ BitStr(paddr) ^ "] <- " ^ BitStr(data));
   result

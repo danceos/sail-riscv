@@ -245,6 +245,7 @@ function not_implemented message = throw(Error_not_implemented(message))
 
 val internal_error : forall ('a : Type). string -> 'a effect {escape}
 function internal_error(s) = {
+    fail_onTrap(0x63);
     assert (false, s);
     throw Error_internal_error()
 }

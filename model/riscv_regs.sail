@@ -80,6 +80,7 @@ function rX r = {
       31 => x31,
       _  => {assert(false, "invalid register number"); zero_reg}
     };
+  print_reg("x" ^ string_of_int(r) ^ " -> " ^ RegStr(v));
   regval_from_reg(v)
 }
 

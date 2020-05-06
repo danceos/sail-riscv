@@ -18,6 +18,9 @@
 #include "riscv_platform_impl.h"
 #include "riscv_sail.h"
 
+/* FAIL* */
+#include "sal/sail/SailFailInterface.h"
+
 #ifdef ENABLE_SPIKE
 #include "tv_spike_intf.h"
 #else
@@ -216,6 +219,7 @@ char *process_args(int argc, char **argv)
                     "v::"
                     "l:"
                     "F:"
+                    "Wf:"/* ignore WF flags to be able to pass flags to FAIL */
                          , options, NULL);
     if (c == -1) break;
     switch (c) {
@@ -779,6 +783,8 @@ void run_sail(void)
     }
 #endif
     if (zhtif_done) {
+      zhtif_done = false;
+      fail_onTrap(0x62);
       /* check exit code */
       if (zhtif_exit_code == 0)
         fprintf(stdout, "SUCCESS\n");
@@ -823,8 +829,10 @@ void init_logs()
   }
 }
 
-int main(int argc, char **argv)
+ __attribute__((weak)) int main(int argc, char **argv)
 {
+  fail_startup(&argc, &argv);
+
   // Initialize model so that we can check or report its architecture.
   preinit_sail();
 
