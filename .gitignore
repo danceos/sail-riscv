@@ -1,4 +1,7 @@
 /generated_definitions
+z3_problems
+build/
+c_emulator/SoftFloat-3e/build/Linux-RISCV-GCC/softfloat.a
 
 # global things
 
