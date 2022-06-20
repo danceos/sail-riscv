@@ -1,5 +1,6 @@
 # Select architecture: RV32 or RV64.
 ARCH ?= RV64
+EXT  = rettag
 
 ifeq ($(ARCH),32)
   override ARCH := RV32
@@ -25,6 +26,10 @@ SAIL_DEFAULT_INST += riscv_insts_fext.sail
 ifeq ($(ARCH),RV64)
 SAIL_DEFAULT_INST +=riscv_insts_dext.sail
 endif
+ifeq ($(EXT),rettag)
+SAIL_DEFAULT_INST +=riscv_insts_rettag.sail
+endif
+
 
 SAIL_SEQ_INST  = $(SAIL_DEFAULT_INST) riscv_jalr_seq.sail
 SAIL_RMEM_INST = $(SAIL_DEFAULT_INST) riscv_jalr_rmem.sail riscv_insts_rmem.sail
@@ -39,6 +44,9 @@ SAIL_SYS_SRCS += riscv_sys_exceptions.sail  # default basic helpers for exceptio
 SAIL_SYS_SRCS += riscv_sync_exception.sail  # define the exception structure used in the model
 SAIL_SYS_SRCS += riscv_next_control.sail    # helpers for the 'N' extension
 SAIL_SYS_SRCS += riscv_softfloat_interface.sail riscv_fdext_regs.sail riscv_fdext_control.sail
+ifeq ($(EXT),rettag)
+SAIL_SYS_SRCS += riscv_csr_rettag.sail
+endif
 SAIL_SYS_SRCS += riscv_csr_ext.sail         # access to CSR extensions
 SAIL_SYS_SRCS += riscv_sys_control.sail     # general exception handling
 
@@ -60,7 +68,13 @@ SAIL_REGS_SRCS += riscv_pmp_regs.sail riscv_pmp_control.sail
 SAIL_REGS_SRCS += riscv_ext_regs.sail $(SAIL_CHECK_SRCS)
 
 SAIL_ARCH_SRCS = $(PRELUDE)
-SAIL_ARCH_SRCS += riscv_types_common.sail riscv_types_ext.sail riscv_types.sail
+SAIL_ARCH_SRCS += riscv_types_common.sail
+ifeq ($(EXT),rettag)
+SAIL_ARCH_SRCS += riscv_types_rettag.sail
+else
+SAIL_ARCH_SRCS += riscv_types_ext.sail
+endif
+SAIL_ARCH_SRCS += riscv_types.sail
 SAIL_ARCH_SRCS += riscv_vmem_types.sail $(SAIL_REGS_SRCS) $(SAIL_SYS_SRCS) riscv_platform.sail
 SAIL_ARCH_SRCS += riscv_mem.sail $(SAIL_VM_SRCS)
 SAIL_ARCH_RVFI_SRCS = $(PRELUDE) rvfi_dii.sail riscv_types_common.sail riscv_types_ext.sail riscv_types.sail riscv_vmem_types.sail $(SAIL_REGS_SRCS) $(SAIL_SYS_SRCS) riscv_platform.sail riscv_mem.sail $(SAIL_VM_SRCS)
